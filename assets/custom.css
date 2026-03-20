@@ -1,0 +1,35 @@
+/* ===== Top Tabs – dark theme ===== */
+
+/* Tabs container strip */
+.custom-tabs {
+    background-color: transparent;
+    border: none;
+    font-family: "Segoe UI", sans-serif;
+}
+
+/* Each tab (default) */
+.custom-tab {
+    background-color: transparent !important;
+    border: none !important;
+    color: #ffffff !important;
+    font-weight: 500;
+    font-size: 16px;
+    padding: 12px 24px !important;
+    margin: 0 !important;
+    text-transform: none;
+}
+
+/* Selected tab */
+.custom-tab--selected {
+    background-color: transparent !important;
+    border: none !important;
+    border-bottom: 4px solid #1DAEE8 !important;  /* sky blue underline */
+    color: #ffffff !important;
+    font-weight: 700;
+}
+
+/* Optional: small hover feedback */
+.custom-tab:hover {
+    cursor: pointer;
+    opacity: 0.9;
+}

@@ -1,0 +1,43 @@
+/* -------- Works for legacy react-select classes used by dcc.Dropdown -------- */
+.opp-dd .Select-placeholder {        /* placeholder (legacy) */
+  color: grey;
+  text-align: center;
+}
+.opp-dd .Select-value-label {        /* selected value (legacy) */
+  color: black !important;
+  text-align: center;
+}
+.opp-dd .Select-menu-outer {         /* dropdown menu container (legacy) */
+  background: white;
+}
+.opp-dd .Select-option {             /* option text (legacy) */
+  color: black;
+}
+
+/* -------- Also cover newer classnames (some Dash builds use these) -------- */
+.opp-dd [class*="placeholder"] {     /* placeholder (modern) */
+  color: grey;
+  text-align: center;
+}
+.opp-dd [class*="singleValue"] {     /* selected value (modern) */
+  color: black;
+  text-align: center;
+}
+.opp-dd [class*="menu"] {            /* dropdown menu container (modern) */
+  background: white;
+}
+.opp-dd [class*="option"] {          /* option text (modern) */
+  color: black;
+}
+
+/* Optional: center the input caret/text alignment inside the control */
+.opp-dd [class*="control"] input {
+  text-align: center;
+}
+
+/* Center placeholder + selected value text */
+.opp-dd .Select__single-value,
+.opp-dd .Select__placeholder {
+    text-align: center;
+    width: 100%;
+}
