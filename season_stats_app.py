@@ -28,7 +28,7 @@ import datetime
 
 # Enable suppressing callback exceptions
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
-server = app.server  # ✅ This is the line you must add for Render
+server = app.server  # ✅ This is the line you must add for Railway
 
 #------Root Page Logging------
 @app.server.before_request
@@ -553,6 +553,192 @@ def build_coach_behaviour_game_state_summary(
         "post_sub_impact": impact,
         "matches": len(first_subs),
     }
+
+
+
+# =========================================================
+# BIG MOMENT GOALS
+# =========================================================
+
+def get_score_before_goal(match_df: pd.DataFrame, idx: int, focus_team: str) -> tuple[int, int]:
+    """
+    Returns (focus_team_score_before, opp_score_before) before the goal at row idx.
+    Assumes match_df is sorted by Minute Scored and only contains rows for one match.
+    """
+    prior = match_df.iloc[:idx]
+
+    focus_before = (prior["Scorer Team"] == focus_team).sum()
+    opp_before = (prior["Scorer Team"] != focus_team).sum()
+
+    return int(focus_before), int(opp_before)
+
+
+def build_big_moment_goals_df(
+    league_goal_data: pd.DataFrame,
+    selected_squad: str,
+    selected_team: str,
+) -> pd.DataFrame:
+    """
+    Returns one row per 'big moment goal' scored by selected_team with columns:
+    Player Name | Match ID | Opponent | Big Moment Type
+    """
+
+    df = league_goal_data.copy()
+
+    # squad filter
+    if "Team" in df.columns:
+        df["Team"] = df["Team"].astype(str).str.strip()
+        df = df[df["Team"] == str(selected_squad).strip()].copy()
+
+    # normalise
+    for c in ["Match ID", "Home Team", "Away Team", "Scorer Team", "Scorer", "Full-score"]:
+        if c in df.columns:
+            df[c] = df[c].fillna("").astype(str).str.strip()
+
+    df["Minute Scored"] = pd.to_numeric(df["Minute Scored"], errors="coerce")
+    df = df.dropna(subset=["Minute Scored"]).copy()
+
+    # only matches involving selected team
+    df = df[
+        (df["Home Team"] == selected_team) |
+        (df["Away Team"] == selected_team)
+    ].copy()
+
+    # only goals scored by selected team
+    df = df[df["Scorer Team"] == selected_team].copy()
+
+    # remove OG
+    df = df[df["Scorer"].str.upper() != "OG"].copy()
+
+    if df.empty:
+        return pd.DataFrame(columns=["Player Name", "Match ID", "Opponent", "Big Moment Type"])
+
+    # opponent
+    df["Opponent"] = np.where(
+        df["Home Team"] == selected_team,
+        df["Away Team"],
+        df["Home Team"]
+    )
+
+    # sort match events safely
+    sort_cols = ["Minute Scored"]
+    if "Scorer" in df.columns:
+        sort_cols.append("Scorer")
+
+    all_events = league_goal_data.copy()
+    if "Team" in all_events.columns:
+        all_events["Team"] = all_events["Team"].astype(str).str.strip()
+        all_events = all_events[all_events["Team"] == str(selected_squad).strip()].copy()
+
+    for c in ["Match ID", "Home Team", "Away Team", "Scorer Team", "Scorer", "Full-score"]:
+        if c in all_events.columns:
+            all_events[c] = all_events[c].fillna("").astype(str).str.strip()
+
+    all_events["Minute Scored"] = pd.to_numeric(all_events["Minute Scored"], errors="coerce")
+    all_events = all_events.dropna(subset=["Minute Scored"]).copy()
+
+    all_events = all_events[
+        (all_events["Home Team"] == selected_team) |
+        (all_events["Away Team"] == selected_team)
+    ].copy()
+
+    results = []
+
+    for match_id, match_df in all_events.groupby("Match ID"):
+        match_df = match_df.sort_values(["Minute Scored"]).reset_index(drop=True)
+
+        if match_df.empty:
+            continue
+
+        home_team = match_df["Home Team"].iloc[0]
+        away_team = match_df["Away Team"].iloc[0]
+        opponent = away_team if home_team == selected_team else home_team
+
+        # final score
+        team_final = (match_df["Scorer Team"] == selected_team).sum()
+        opp_final = (match_df["Scorer Team"] != selected_team).sum()
+
+        for i, row in match_df.iterrows():
+            if row["Scorer Team"] != selected_team:
+                continue
+
+            scorer = row["Scorer"]
+            if str(scorer).upper() == "OG" or str(scorer).strip() == "":
+                continue
+
+            team_before, opp_before = get_score_before_goal(match_df, i, selected_team)
+            team_after = team_before + 1
+            opp_after = opp_before
+
+            category = None
+
+            # 1) Match winner
+            # team wins, and this goal creates the final winning margin
+            # example final 2-1 -> goal to make 2-1
+            if team_final > opp_final:
+                final_margin = team_final - opp_final
+                current_margin = team_after - opp_after
+                if current_margin == final_margin:
+                    category = "Match Winner"
+
+            # 2) Match-tying goal
+            # example final 1-1 -> goal that makes it 1-1
+            if category is None and team_final == opp_final:
+                if team_after == opp_after:
+                    category = "Match-Tying Goal"
+
+            # 3) Go-ahead goal held
+            # first goal that puts team in front and they never lose that lead
+            if category is None and team_final > opp_final:
+                if team_after > opp_after:
+                    future = match_df.iloc[i + 1 :].copy()
+
+                    # running state after this goal
+                    t_score = team_after
+                    o_score = opp_after
+                    lost_lead = False
+
+                    for _, fut in future.iterrows():
+                        if fut["Scorer Team"] == selected_team:
+                            t_score += 1
+                        else:
+                            o_score += 1
+
+                        if t_score <= o_score:
+                            lost_lead = True
+                            break
+
+                    if not lost_lead:
+                        category = "Go-Ahead Goal Held"
+
+            if category is not None:
+                results.append({
+                    "Player Name": scorer,
+                    "Match ID": match_id,
+                    "Opponent": opponent,
+                    "Big Moment Type": category,
+                })
+
+    if not results:
+        return pd.DataFrame(columns=["Player Name", "Match ID", "Opponent", "Big Moment Type"])
+
+    out = pd.DataFrame(results)
+
+    # remove duplicates if a goal satisfies more than one label
+    # keep Match Winner > Match-Tying Goal > Go-Ahead Goal Held
+    priority = {
+        "Match Winner": 1,
+        "Match-Tying Goal": 2,
+        "Go-Ahead Goal Held": 3,
+    }
+    out["Priority"] = out["Big Moment Type"].map(priority)
+    out = out.sort_values(["Match ID", "Player Name", "Priority"])
+    out = out.drop_duplicates(subset=["Match ID", "Player Name"], keep="first")
+    out = out.drop(columns=["Priority"])
+
+    return out
+
+
 
 
 
@@ -3323,6 +3509,41 @@ player_insights_layout = dbc.Container(
 
         html.Br(),
 
+        # =========================================================
+        # big moment goals layout
+        # =========================================================
+
+        html.Div([
+            html.Div([
+                dcc.Dropdown(
+                    id="big-moment-goal-filter",
+                    options=[
+                        {"label": "All Big Moment Goals", "value": "ALL"},
+                        {"label": "Match Winners", "value": "Match Winner"},
+                        {"label": "Come Back Goals - to draw", "value": "Match-Tying Goal"},
+                        {"label": "Go-Ahead Goals & held win", "value": "Go-Ahead Goal Held"},
+                    ],
+                    value="ALL",
+                    clearable=False,
+                    style={
+                        "width": "260px",
+                        "color": "black",
+                        "fontFamily": "Segoe UI Black",
+                        "fontSize": "14px",
+                    },
+                ),
+            ], style={"display": "flex", "justifyContent": "center", "paddingBottom": "10px"}),
+
+            dcc.Graph(id="big-moment-goals-chart", style={"backgroundColor": "black"})
+        ], style={
+            "backgroundColor": PANEL_BG,
+            "padding": "20px",
+            "border": "1px solid white",
+            "borderRadius": "10px",
+            "marginBottom": "20px"
+        }),
+        html.Br(),
+
         # Goals Conceded While On Field
         html.Div([
             html.Div([
@@ -4332,8 +4553,7 @@ opponent_insights_layout = dbc.Container(
         }),
         html.Br(),
 
-
-
+        
         # === Opponent – Starts and Appearances Opponent Insights tab ===
         html.Div([
             html.Div([
@@ -5593,8 +5813,12 @@ def update_goals_chart(selected_squad, high_clicks, low_clicks, total_clicks):
             bargap=0.0,
             bargroupgap=0.1,
             font=dict(size=16, family="Segoe UI", color="white"),
-            xaxis=dict(tickfont=dict(size=14)),
-            yaxis=dict(tickfont=dict(size=14)),
+            xaxis=dict(
+                tickfont=dict(size=14),
+                showgrid=False),
+            yaxis=dict(
+                tickfont=dict(size=14),
+                showgrid=False),
             hoverlabel=dict(font=dict(family="Segoe UI")),
             plot_bgcolor="black",
             paper_bgcolor="black",
@@ -6036,9 +6260,14 @@ def update_contributions_chart(selected_squad, high_clicks, low_clicks, total_cl
                 tickfont=dict(size=14),
                 categoryorder="array",
                 categoryarray=list(merged["Player Name"]),
-                tickangle=-30
+                tickangle=-30,
+                showgrid=False   # ✅ add this
             ),
-            yaxis=dict(title="Contributions", tickfont=dict(size=14)),
+            yaxis=dict(
+                title="Contributions",
+                tickfont=dict(size=14),
+                showgrid=False   # ✅ add this
+            ),
         )
 
     else:
@@ -6065,14 +6294,152 @@ def update_contributions_chart(selected_squad, high_clicks, low_clicks, total_cl
             plot_bgcolor="black",
             paper_bgcolor="black",
             font=dict(size=16, family="Segoe UI", color="white"),
-            xaxis=dict(tickangle=-30),
-            yaxis=dict(title="Minutes per Contribution"),
+            xaxis=dict(
+                tickangle=-30,
+                showgrid=False   # ✅ add this
+            ),
+            yaxis=dict(
+                title="Minutes per Contribution",
+                showgrid=False   # ✅ add this
+            ),
         )
 
     return fig
 
 
+# =========================================================
+# CALLBACK player insights - big moment goals
+# =========================================================
+@callback(
+    Output("big-moment-goals-chart", "figure"),
+    [
+        Input("team-select", "value"),
+        Input("big-moment-goal-filter", "value"),
+    ]
+)
+def update_big_moment_goals_chart(selected_squad, selected_filter):
+    selected_team = TEAM_MAP.get(selected_squad, FOCUS_TEAM)
 
+    df = build_big_moment_goals_df(
+        league_goal_data=league_goal_data,
+        selected_squad=selected_squad,
+        selected_team=selected_team,
+    )
+
+    if df.empty:
+        fig = go.Figure()
+        fig.update_layout(
+            title=f"{selected_team} – Big Moment Goals",
+            plot_bgcolor="black",
+            paper_bgcolor="black",
+            font=dict(color="white", family="Segoe UI"),
+            annotations=[
+                dict(
+                    text="No big moment goals yet",
+                    x=0.5, y=0.5,
+                    xref="paper", yref="paper",
+                    showarrow=False,
+                    font=dict(size=18)
+                )
+            ]
+        )
+        return fig
+
+    if selected_filter and selected_filter != "ALL":
+        df = df[df["Big Moment Type"] == selected_filter].copy()
+
+    if df.empty:
+        fig = go.Figure()
+        fig.update_layout(
+            title=f"{selected_team} – Big Moment Goals",
+            plot_bgcolor="black",
+            paper_bgcolor="black",
+            font=dict(color="white", family="Segoe UI"),
+            annotations=[
+                dict(
+                    text="No goals for selected filter",
+                    x=0.5, y=0.5,
+                    xref="paper", yref="paper",
+                    showarrow=False,
+                    font=dict(size=18)
+                )
+            ]
+        )
+        return fig
+
+    grouped = (
+        df.groupby(["Player Name", "Big Moment Type"])
+        .agg(
+            Count=("Match ID", "size"),
+            MatchIDs=("Match ID", lambda x: ", ".join(sorted(set(map(str, x))))),
+            Opponents=("Opponent", lambda x: ", ".join(sorted(set(map(str, x))))),
+        )
+        .reset_index()
+    )
+
+    order_df = (
+        grouped.groupby("Player Name")["Count"]
+        .sum()
+        .reset_index()
+        .sort_values("Count", ascending=False)
+    )
+    player_order = order_df["Player Name"].tolist()
+
+    type_order = ["Match Winner", "Match-Tying Goal", "Go-Ahead Goal Held"]
+
+    fig = go.Figure()
+    for goal_type in type_order:
+        sub = grouped[grouped["Big Moment Type"] == goal_type].copy()
+        if sub.empty:
+            continue
+
+        fig.add_trace(go.Bar(
+            x=sub["Player Name"],
+            y=sub["Count"],
+            name=goal_type,
+            text=sub["Count"],
+            textposition="outside",
+            customdata=sub[["Big Moment Type", "Opponents", "MatchIDs"]].values,
+            hovertemplate=(
+                "Player: %{x}<br>"
+                "Type: %{customdata[0]}<br>"
+                "Goals: %{y}<br>"
+                "Opponents: %{customdata[1]}<br>"
+                "Match IDs: %{customdata[2]}<extra></extra>"
+            ),
+        ))
+
+    title_suffix = ""
+    if selected_filter and selected_filter != "ALL":
+        title_suffix = f" – {selected_filter}"
+
+    fig.update_layout(
+        title=f"{selected_team} – Big Moment Goals{title_suffix}",
+        barmode="stack",
+        plot_bgcolor="black",
+        paper_bgcolor="black",
+        font=dict(color="white", family="Segoe UI", size=14),
+        xaxis=dict(
+            title="Player Name",
+            categoryorder="array",
+            categoryarray=player_order,
+            showgrid=False,
+            tickangle=-30,
+        ),
+        yaxis=dict(
+            title="Goals",
+            showgrid=False,
+            tickformat=".0f",
+            rangemode="tozero",
+        ),
+        margin=dict(t=40, b=40),
+        bargap=0.1,
+        bargroupgap=0.0,
+        hoverlabel=dict(font=dict(family="Segoe UI")),
+        legend_title="Big Moment Type",
+    )
+
+    return fig
 
 
 # callback to generate clean sheet chart
