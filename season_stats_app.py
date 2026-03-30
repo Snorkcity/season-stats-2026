@@ -30,6 +30,9 @@ import datetime
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 server = app.server  # ✅ This is the line you must add for Railway
 
+
+APP_VERSION = "2026.03.30.2"
+
 #------Root Page Logging------
 @app.server.before_request
 def log_root_hits():
