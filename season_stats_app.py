@@ -4636,25 +4636,33 @@ app.layout = html.Div(
             [
 
                 html.Div(
-                    dcc.Dropdown(
-                        id="team-select",
-                        options=[
-                            {"label": "1sts", "value": "1sts"},
-                            {"label": "Reserves", "value": "Reserves"},
-                        ],
-                        value="1sts",
-                        clearable=False,
-                        style={
-                            "width": "220px",
-                            "color": "black",
-                            "fontFamily": title_font["fontFamily"],
-                            "fontSize": "14px",
-                        },
-                    ),
+                    [
+                        dcc.Dropdown(
+                            id="team-select",
+                            options=[
+                                {"label": "1sts", "value": "1sts"},
+                                {"label": "Reserves", "value": "Reserves"},
+                            ],
+                            value="1sts",
+                            clearable=False,
+                            style={
+                                "width": "220px",
+                                "color": "black",
+                                "fontFamily": title_font["fontFamily"],
+                                "fontSize": "14px",
+                            },
+                        ),
+                    ],
                     style={
                         "display": "flex",
                         "justifyContent": "center",
+                        "alignItems": "center",
+                        "gap": "10px",
+                        "padding": "10px",
+                        "margin": "0 auto",
+                        "paddingLeft": "40px",
                         "marginBottom": "10px",
+                        "flexWrap": "wrap",
                     },
                 ),
 
@@ -4668,7 +4676,7 @@ app.layout = html.Div(
                         "fontFamily": base_font["fontFamily"],
                         "fontSize": "13px",
                         "textAlign": "center",
-                        
+                        "marginBottom": "0",
                     },
                 ),
 
