@@ -4991,6 +4991,14 @@ def update_league_ladder_table(n_clicks, selected_squad):
         "Wanderers": "firebrick",
         "Belconnen": "skyblue",
         "Belconnen Reserves": "skyblue",
+        "TuggeranongRes": "green",
+        "CroatiaRes": "crimson",
+        "OlympicRes": "navy",
+        "MajuraRes": "royalblue",
+        "ANURes": "orange",
+        "WanderersRes": "firebrick",
+        "Belconnen": "skyblue",
+        "BelReserves": "skyblue",
     }
 
     style_data_conditional = [
