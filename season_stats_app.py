@@ -9829,16 +9829,8 @@ def update_opp_starts_appearances_chart(
         df["Team"] = df["Team"].astype(str).str.strip()
         df = df[df["Team"] == str(selected_squad).strip()].copy()
 
-    # 1) Find matches where the selected Belco squad played this opponent
-    belco_match_ids = set(df[df["Country"] == focus_team]["Match ID"].unique())
-    opp_match_ids = set(df[df["Country"] == str(selected_opponent).strip()]["Match ID"].unique())
-    relevant_match_ids = belco_match_ids.intersection(opp_match_ids)
-
-    # 2) From those matches, keep only opponent players
-    df = df[
-        (df["Match ID"].isin(relevant_match_ids)) &
-        (df["Country"] == str(selected_opponent).strip())
-    ].copy()
+    # keep all matches for the selected opponent
+    df = df[df["Country"] == str(selected_opponent).strip()].copy()
 
     if df.empty:
         fig = go.Figure()
@@ -10006,8 +9998,6 @@ def update_opp_minutes_played_chart(
     selected_squad, high_clicks, low_clicks, avg_clicks, selected_opponent
 ):
 
-    focus_team = TEAM_MAP.get(selected_squad, selected_squad)
-
     if not selected_opponent:
         fig = go.Figure()
         fig.update_layout(
@@ -10023,33 +10013,24 @@ def update_opp_minutes_played_chart(
     df["Player Name"] = df["Player Name"].astype(str).str.strip()
     df["Country"] = df["Country"].astype(str).str.strip()
     df["Match ID"] = df["Match ID"].astype(str).str.strip()
+    df["Mins Played"] = pd.to_numeric(df["Mins Played"], errors="coerce")
 
     if "Team" in df.columns:
         df["Team"] = df["Team"].astype(str).str.strip()
         df = df[df["Team"] == str(selected_squad).strip()].copy()
 
-    # find matches where Belco squad played this opponent
-    belco_matches = set(df[df["Country"] == focus_team]["Match ID"].unique())
-    opp_matches = set(df[df["Country"] == selected_opponent]["Match ID"].unique())
-    match_ids = belco_matches.intersection(opp_matches)
-
-    # keep only opponent players from those matches
-    df = df[
-        (df["Match ID"].isin(match_ids)) &
-        (df["Country"] == selected_opponent)
-    ].copy()
+    # keep all rows for the selected opponent, not just matches vs Belconnen
+    df = df[df["Country"] == str(selected_opponent).strip()].copy()
 
     if df.empty:
         fig = go.Figure()
         fig.update_layout(
-            title=f"{selected_opponent} – no player minutes recorded vs {focus_team}",
+            title=f"{selected_opponent} – no player minutes recorded",
             plot_bgcolor="black",
             paper_bgcolor="black",
             font=dict(size=14, color="white", family="Segoe UI"),
         )
         return fig
-
-    df["Mins Played"] = pd.to_numeric(df["Mins Played"], errors="coerce")
 
     df["Appearance"] = (
         df["Appearance"]
