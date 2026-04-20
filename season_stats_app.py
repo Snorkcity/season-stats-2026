@@ -31,7 +31,7 @@ app = dash.Dash(__name__, suppress_callback_exceptions=True)
 server = app.server  # ✅ This is the line you must add for Railway
 
 
-APP_VERSION = "2026_v1.13"
+APP_VERSION = "2026_v1.14"
 
 #------Root Page Logging------
 @app.server.before_request
