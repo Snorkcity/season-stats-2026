@@ -8871,8 +8871,11 @@ def update_opp_goals_per_min(
         )
         return fig
 
+    is_all = str(selected_opponent).strip().upper() == "ALL"
+    chart_team = "ALL Teams" if is_all else selected_opponent
+
     # -----------------------------
-    # Minutes dataframe (players of selected opponent)
+    # Minutes dataframe
     # -----------------------------
     minutes_df = player_data.copy()
 
@@ -8883,12 +8886,14 @@ def update_opp_goals_per_min(
 
     if "Country" in minutes_df.columns:
         minutes_df["Country"] = minutes_df["Country"].astype(str).str.strip()
-        minutes_df = minutes_df[minutes_df["Country"] == selected_opponent].copy()
+
+        if not is_all:
+            minutes_df = minutes_df[minutes_df["Country"] == selected_opponent].copy()
 
     minutes_df["Mins Played"] = pd.to_numeric(minutes_df["Mins Played"], errors="coerce")
 
     # -----------------------------
-    # Goals dataframe (goals scored BY selected opponent)
+    # Goals dataframe
     # -----------------------------
     goals_df = league_goal_data.copy()
 
@@ -8902,16 +8907,18 @@ def update_opp_goals_per_min(
         if c in goals_df.columns:
             goals_df[c] = goals_df[c].fillna("").astype(str).str.strip()
 
-    # Only goals where this team is the scorer
-    goals_df = goals_df[goals_df["Scorer Team"] == selected_opponent].copy()
+    # Only goals where this team is the scorer, unless ALL is selected
+    if not is_all:
+        goals_df = goals_df[goals_df["Scorer Team"] == selected_opponent].copy()
 
-    # Optional: keep only games where they are actually home/away (safety)
-    if "Home Team" in goals_df.columns and "Away Team" in goals_df.columns:
-        mask_involved = (
-            (goals_df["Home Team"] == selected_opponent) |
-            (goals_df["Away Team"] == selected_opponent)
-        )
-        goals_df = goals_df[mask_involved].copy()
+    # Optional: keep only games where selected opponent is actually home/away
+    if not is_all:
+        if "Home Team" in goals_df.columns and "Away Team" in goals_df.columns:
+            mask_involved = (
+                (goals_df["Home Team"] == selected_opponent) |
+                (goals_df["Away Team"] == selected_opponent)
+            )
+            goals_df = goals_df[mask_involved].copy()
 
     # Strip/upper scorer and drop OG if used in your data
     goals_df["Scorer"] = goals_df["Scorer"].astype(str).str.strip()
@@ -8997,7 +9004,7 @@ def update_opp_goals_per_min(
     if merged_df.empty:
         fig = go.Figure()
         fig.update_layout(
-            title=f"{selected_opponent} – No goals scored in tracked matches",
+            title=f"{chart_team} – No goals scored in tracked matches",
             plot_bgcolor="black",
             paper_bgcolor="black",
             font=dict(color="white", family=base_font["fontFamily"]),
@@ -9006,7 +9013,7 @@ def update_opp_goals_per_min(
         )
         return fig
 
-    # mins per goal (raw + display)
+    # mins per goal
     merged_df["Goals Per Minute"] = merged_df.apply(
         lambda r: (r["Mins Played"] / r["Goals"]) if r["Goals"] > 0 else 0,
         axis=1,
@@ -9041,11 +9048,16 @@ def update_opp_goals_per_min(
     # Build figure
     # -----------------------------
     if view_mode == "goals":
-        # Add Opponent team for each goal using get_against_team helper
         goals_df2 = goals_df.copy()
+
         if "Home Team" in goals_df2.columns and "Away Team" in goals_df2.columns:
             goals_df2["Against Team"] = goals_df2.apply(
-                lambda r: get_against_team(r, selected_opponent), axis=1
+                lambda r: (
+                    get_against_team(r, r["Scorer Team"])
+                    if is_all
+                    else get_against_team(r, selected_opponent)
+                ),
+                axis=1
             )
         else:
             goals_df2["Against Team"] = "Unknown"
@@ -9094,7 +9106,7 @@ def update_opp_goals_per_min(
 
         fig.update_layout(
             barmode="stack",
-            title=f"{selected_opponent} – Goals by Opponent (click legend to filter)",
+            title=f"{chart_team} – Goals by Opponent (click legend to filter)",
             plot_bgcolor="black",
             paper_bgcolor="black",
             font=dict(size=16, family="Segoe UI", color="white"),
@@ -9127,7 +9139,7 @@ def update_opp_goals_per_min(
             x="Player Name",
             y="Display Goals Per Minute",
             color_discrete_sequence=["#77BCE8"],
-            title=f"{selected_opponent} – Minutes per Goal (rounded up, capped at 270)",
+            title=f"{chart_team} – Minutes per Goal (rounded up, capped at 270)",
             template="plotly_dark",
             text="Goals",
         )
@@ -9176,6 +9188,7 @@ def update_opp_goals_per_min(
 )
 def update_opp_assists_chart(
     high_clicks, low_clicks, total_clicks, selected_squad, selected_opponent):
+
     # No opponent selected
     if not selected_opponent:
         fig = go.Figure()
@@ -9189,8 +9202,11 @@ def update_opp_assists_chart(
         )
         return fig
 
+    is_all = str(selected_opponent).strip().upper() == "ALL"
+    chart_team = "ALL Teams" if is_all else selected_opponent
+
     # -----------------------------
-    # Minutes (per player) for selected opponent
+    # Minutes dataframe
     # -----------------------------
     minutes_df = player_data.copy()
 
@@ -9201,7 +9217,9 @@ def update_opp_assists_chart(
 
     if "Country" in minutes_df.columns:
         minutes_df["Country"] = minutes_df["Country"].astype(str).str.strip()
-        minutes_df = minutes_df[minutes_df["Country"] == selected_opponent].copy()
+
+        if not is_all:
+            minutes_df = minutes_df[minutes_df["Country"] == selected_opponent].copy()
 
     minutes_df["Mins Played"] = pd.to_numeric(minutes_df["Mins Played"], errors="coerce")
     minutes_summary = (
@@ -9209,7 +9227,7 @@ def update_opp_assists_chart(
     )
 
     # -----------------------------
-    # Goal events – only goals scored BY selected_opponent
+    # Goal events
     # -----------------------------
     events = league_goal_data.copy()
 
@@ -9223,12 +9241,14 @@ def update_opp_assists_chart(
         if c in events.columns:
             events[c] = events[c].fillna("").astype(str).str.strip()
 
-    events = events[events["Scorer Team"] == selected_opponent].copy()
+    # Only goals scored by selected opponent, unless ALL is selected
+    if not is_all:
+        events = events[events["Scorer Team"] == selected_opponent].copy()
 
     if events.empty:
         fig = go.Figure()
         fig.update_layout(
-            title=f"{selected_opponent} – No assists recorded in tracked matches",
+            title=f"{chart_team} – No assists recorded in tracked matches",
             plot_bgcolor="black",
             paper_bgcolor="black",
             font=dict(color="white", family=base_font["fontFamily"]),
@@ -9237,7 +9257,7 @@ def update_opp_assists_chart(
         )
         return fig
 
-    # Decide which assist column to use: "Assists" (Olyroos tab) OR "Assist" (league-wide tab)
+    # Decide which assist column to use: "Assists" or "Assist"
     if "Assists" in events.columns:
         assist_col = "Assists"
     elif "Assist" in events.columns:
@@ -9245,7 +9265,7 @@ def update_opp_assists_chart(
     else:
         fig = go.Figure()
         fig.update_layout(
-            title=f"{selected_opponent} – No assist column found (expected 'Assist' or 'Assists')",
+            title=f"{chart_team} – No assist column found (expected 'Assist' or 'Assists')",
             plot_bgcolor="black",
             paper_bgcolor="black",
             font=dict(color="white", family=base_font["fontFamily"]),
@@ -9254,21 +9274,28 @@ def update_opp_assists_chart(
         )
         return fig
 
-    # Make sure team is actually home/away and derive Opponent
+    # Make sure team is actually home/away and derive opponent
     if "Home Team" in events.columns and "Away Team" in events.columns:
-        mask_involved = (
-            (events["Home Team"] == selected_opponent) |
-            (events["Away Team"] == selected_opponent)
-        )
-        events = events[mask_involved].copy()
+        if not is_all:
+            mask_involved = (
+                (events["Home Team"] == selected_opponent) |
+                (events["Away Team"] == selected_opponent)
+            )
+            events = events[mask_involved].copy()
+
         events["Opponent"] = events.apply(
-            lambda r: get_against_team(r, selected_opponent), axis=1
+            lambda r: (
+                get_against_team(r, r["Scorer Team"])
+                if is_all
+                else get_against_team(r, selected_opponent)
+            ),
+            axis=1
         )
     else:
         events["Opponent"] = "Unknown"
 
     # -----------------------------
-    # Count assists per player (overall)
+    # Count assists per player
     # -----------------------------
     assists_series = events[assist_col].fillna("").astype(str).str.strip()
     assists_series = assists_series[assists_series.str.len() > 0]
@@ -9278,7 +9305,7 @@ def update_opp_assists_chart(
     if assist_counts.empty:
         fig = go.Figure()
         fig.update_layout(
-            title=f"{selected_opponent} – No assists recorded in tracked matches",
+            title=f"{chart_team} – No assists recorded in tracked matches",
             plot_bgcolor="black",
             paper_bgcolor="black",
             font=dict(color="white", family=base_font["fontFamily"]),
@@ -9288,7 +9315,7 @@ def update_opp_assists_chart(
         return fig
 
     # -----------------------------
-    # Merge with minutes (minutes may be missing!)
+    # Merge with minutes
     # -----------------------------
     merged = assist_counts.merge(minutes_summary, on="Player Name", how="left")
     merged["Mins Played"] = pd.to_numeric(merged["Mins Played"], errors="coerce")
@@ -9299,11 +9326,12 @@ def update_opp_assists_chart(
     # Which button?
     trig = ctx.triggered_id or "opp-sort-high-assists"
     view_mode = "per_minute"
+
     if trig == "opp-sort-total-assists":
         view_mode = "assists"
 
     # -----------------------------
-    # Build "Total Assists" view (always available if we have assists)
+    # Total Assists view
     # -----------------------------
     if view_mode == "assists":
         ev_assists = events.copy()
@@ -9312,17 +9340,18 @@ def update_opp_assists_chart(
 
         by_opp = (
             ev_assists.groupby(["Assist_Player", "Opponent"])
-                      .size()
-                      .reset_index(name="Assists")
-                      .rename(columns={"Assist_Player": "Player Name"})
+            .size()
+            .reset_index(name="Assists")
+            .rename(columns={"Assist_Player": "Player Name"})
         )
+
         by_opp = by_opp[by_opp["Player Name"].isin(merged["Player Name"])]
 
-        # Sort by total assists desc
         merged_sorted = merged.sort_values("Assists", ascending=False)
         x_order = list(merged_sorted["Player Name"])
 
         fig = go.Figure()
+
         for opp in sorted(by_opp["Opponent"].dropna().unique()):
             sub = by_opp[by_opp["Opponent"] == opp]
             fig.add_trace(
@@ -9351,10 +9380,12 @@ def update_opp_assists_chart(
             zeroline=True,
             zerolinecolor="#555",
         )
+
         fig.update_traces(cliponaxis=False)
+
         fig.update_layout(
             barmode="stack",
-            title=f"{selected_opponent} – Assists by Opponent (click legend to filter)",
+            title=f"{chart_team} – Assists by Opponent (click legend to filter)",
             plot_bgcolor="black",
             paper_bgcolor="black",
             font=dict(color="white", family="Segoe UI", size=16),
@@ -9371,10 +9402,11 @@ def update_opp_assists_chart(
             margin=dict(t=40, b=60),
             hoverlabel=dict(font=dict(family="Segoe UI")),
         )
+
         return fig
 
     # -----------------------------
-    # Build "Per Minute" view – only for players with minutes
+    # Per Minute view
     # -----------------------------
     pm_df = merged.copy()
     pm_df = pm_df[(pm_df["Mins Played"].notna()) & (pm_df["Mins Played"] > 0)]
@@ -9382,7 +9414,7 @@ def update_opp_assists_chart(
     if pm_df.empty:
         fig = go.Figure()
         fig.update_layout(
-            title=f"{selected_opponent} – Assists recorded but no minutes available for those players",
+            title=f"{chart_team} – Assists recorded but no minutes available for those players",
             plot_bgcolor="black",
             paper_bgcolor="black",
             font=dict(color="white", family=base_font["fontFamily"]),
@@ -9404,6 +9436,7 @@ def update_opp_assists_chart(
         pm_df = pm_df.sort_values("Assists Per Minute", ascending=True)
 
     x_order = list(pm_df["Player Name"])
+
     customdata = pm_df[
         [
             "Assists",
@@ -9414,6 +9447,7 @@ def update_opp_assists_chart(
     ].values
 
     fig = go.Figure()
+
     fig.add_trace(
         go.Bar(
             x=pm_df["Player Name"],
@@ -9442,8 +9476,9 @@ def update_opp_assists_chart(
         zeroline=True,
         zerolinecolor="#555",
     )
+
     fig.update_layout(
-        title=f"{selected_opponent} – Assists Per Minute (rounded up, capped 270 mins)",
+        title=f"{chart_team} – Assists Per Minute (rounded up, capped 270 mins)",
         plot_bgcolor="black",
         paper_bgcolor="black",
         font=dict(color="white", family="Segoe UI", size=16),
@@ -9492,8 +9527,11 @@ def update_opp_contributions_chart(
         )
         return fig
 
+    is_all = str(selected_opponent).strip().upper() == "ALL"
+    chart_team = "ALL Teams" if is_all else selected_opponent
+
     # -----------------------------
-    # Minutes per player for selected opponent (from player_data)
+    # Minutes dataframe
     # -----------------------------
     minutes_df = player_data.copy()
 
@@ -9503,7 +9541,9 @@ def update_opp_contributions_chart(
 
     if "Country" in minutes_df.columns:
         minutes_df["Country"] = minutes_df["Country"].astype(str).str.strip()
-        minutes_df = minutes_df[minutes_df["Country"] == selected_opponent].copy()
+
+        if not is_all:
+            minutes_df = minutes_df[minutes_df["Country"] == selected_opponent].copy()
 
     minutes_df["Mins Played"] = pd.to_numeric(minutes_df["Mins Played"], errors="coerce")
     minutes_summary = (
@@ -9511,7 +9551,7 @@ def update_opp_contributions_chart(
     )
 
     # -----------------------------
-    # Goal events – from league_goal_data, goals scored BY selected_opponent
+    # Goal events
     # -----------------------------
     events = league_goal_data.copy()
 
@@ -9523,12 +9563,14 @@ def update_opp_contributions_chart(
         if c in events.columns:
             events[c] = events[c].fillna("").astype(str).str.strip()
 
-    events = events[events["Scorer Team"] == selected_opponent].copy()
+    # Only goals scored by selected opponent, unless ALL is selected
+    if not is_all:
+        events = events[events["Scorer Team"] == selected_opponent].copy()
 
     if events.empty:
         fig = go.Figure()
         fig.update_layout(
-            title=f"{selected_opponent} – No goal contributions recorded in tracked matches",
+            title=f"{chart_team} – No goal contributions recorded in tracked matches",
             plot_bgcolor="black",
             paper_bgcolor="black",
             font=dict(color="white", family=base_font["fontFamily"]),
@@ -9537,36 +9579,43 @@ def update_opp_contributions_chart(
         )
         return fig
 
-    # Determine assist column name ("Assist" in league tab, "Assists" in Olyroos tab)
+    # Determine assist column name
     if "Assists" in events.columns:
         assist_col = "Assists"
     elif "Assist" in events.columns:
         assist_col = "Assist"
     else:
-        assist_col = None  # we can still do goals-only contributions
+        assist_col = None
 
-    # Make sure this team is involved as home/away and derive Opponent via helper
+    # Make sure selected opponent is involved as home/away and derive opponent
     if "Home Team" in events.columns and "Away Team" in events.columns:
-        mask_involved = (
-            (events["Home Team"] == selected_opponent) |
-            (events["Away Team"] == selected_opponent)
-        )
-        events = events[mask_involved].copy()
+        if not is_all:
+            mask_involved = (
+                (events["Home Team"] == selected_opponent) |
+                (events["Away Team"] == selected_opponent)
+            )
+            events = events[mask_involved].copy()
+
         events["Opponent"] = events.apply(
-            lambda r: get_against_team(r, selected_opponent), axis=1
+            lambda r: (
+                get_against_team(r, r["Scorer Team"])
+                if is_all
+                else get_against_team(r, selected_opponent)
+            ),
+            axis=1
         )
     else:
         events["Opponent"] = "Unknown"
 
     # -----------------------------
-    # Goals per player (exclude OG)
+    # Goals per player
     # -----------------------------
     goals_only = events[events["Scorer"].str.upper().ne("OG")].copy()
     goals_counts = goals_only["Scorer"].value_counts().reset_index()
     goals_counts.columns = ["Player Name", "Goals"]
 
     # -----------------------------
-    # Assists per player (if assist column exists)
+    # Assists per player
     # -----------------------------
     if assist_col is not None:
         assists_series = events[assist_col].fillna("").astype(str).str.strip()
@@ -9577,20 +9626,22 @@ def update_opp_contributions_chart(
         assists_counts = pd.DataFrame(columns=["Player Name", "Assists"])
 
     # -----------------------------
-    # Merge goal + assist totals into Contributions
+    # Merge goal + assist totals
     # -----------------------------
     totals = pd.merge(goals_counts, assists_counts, on="Player Name", how="outer").fillna(0)
     totals["Goals"] = totals["Goals"].astype(int)
+
     if "Assists" in totals.columns:
         totals["Assists"] = totals["Assists"].astype(int)
     else:
         totals["Assists"] = 0
+
     totals["Contributions"] = totals["Goals"] + totals["Assists"]
 
     if totals["Contributions"].sum() == 0:
         fig = go.Figure()
         fig.update_layout(
-            title=f"{selected_opponent} – No goal contributions recorded in tracked matches",
+            title=f"{chart_team} – No goal contributions recorded in tracked matches",
             plot_bgcolor="black",
             paper_bgcolor="black",
             font=dict(color="white", family=base_font["fontFamily"]),
@@ -9605,56 +9656,62 @@ def update_opp_contributions_chart(
     merged = totals.merge(minutes_summary, on="Player Name", how="left")
     merged["Mins Played"] = pd.to_numeric(merged["Mins Played"], errors="coerce")
 
-    # Simple placeholder – we’re not summarising assist types from league tab here
     merged["Assist Type Summary"] = "No data"
 
     # Button logic
     trig = ctx.triggered_id or "opp-sort-high-contrib"
     view_mode = "per_minute"
+
     if trig == "opp-sort-total-contrib":
         view_mode = "contrib"
 
     # -----------------------------
-    # View 1: Total Contributions by Opponent (stacked)
+    # View 1: Total Contributions by Opponent
     # -----------------------------
     if view_mode == "contrib":
-        # Goals per player per opponent
         g_by_opp = (
             goals_only.groupby(["Scorer", "Opponent"])
-                      .size()
-                      .reset_index(name="Goals")
-                      .rename(columns={"Scorer": "Player Name"})
+            .size()
+            .reset_index(name="Goals")
+            .rename(columns={"Scorer": "Player Name"})
         )
 
-        # Assists per player per opponent (if we have an assist column)
         if assist_col is not None:
             ev_assists = events.copy()
             ev_assists["Assist_Player"] = ev_assists[assist_col].fillna("").astype(str).str.strip()
             ev_assists = ev_assists[ev_assists["Assist_Player"].str.len() > 0]
+
             a_by_opp = (
                 ev_assists.groupby(["Assist_Player", "Opponent"])
-                          .size()
-                          .reset_index(name="Assists")
-                          .rename(columns={"Assist_Player": "Player Name"})
+                .size()
+                .reset_index(name="Assists")
+                .rename(columns={"Assist_Player": "Player Name"})
             )
         else:
             a_by_opp = pd.DataFrame(columns=["Player Name", "Opponent", "Assists"])
 
-        # Combine to Contributions per player per opponent
-        by_opp = pd.merge(g_by_opp, a_by_opp, on=["Player Name", "Opponent"], how="outer").fillna(0)
+        by_opp = pd.merge(
+            g_by_opp,
+            a_by_opp,
+            on=["Player Name", "Opponent"],
+            how="outer"
+        ).fillna(0)
+
         by_opp["Goals"] = by_opp["Goals"].astype(int)
+
         if "Assists" in by_opp.columns:
             by_opp["Assists"] = by_opp["Assists"].astype(int)
         else:
             by_opp["Assists"] = 0
+
         by_opp["Contributions"] = by_opp["Goals"] + by_opp["Assists"]
 
-        # Keep only players in current totals list, and order by total contributions
         merged_sorted = merged.sort_values("Contributions", ascending=False)
         by_opp = by_opp[by_opp["Player Name"].isin(merged_sorted["Player Name"])]
         x_order = list(merged_sorted["Player Name"])
 
         fig = go.Figure()
+
         for opp in sorted(by_opp["Opponent"].dropna().unique()):
             sub = by_opp[by_opp["Opponent"] == opp]
             fig.add_trace(
@@ -9683,10 +9740,12 @@ def update_opp_contributions_chart(
             zeroline=True,
             zerolinecolor="#555",
         )
+
         fig.update_traces(cliponaxis=False)
+
         fig.update_layout(
             barmode="stack",
-            title=f"{selected_opponent} – Goal Contributions by Opponent (click legend to filter)",
+            title=f"{chart_team} – Goal Contributions by Opponent (click legend to filter)",
             plot_bgcolor="black",
             paper_bgcolor="black",
             font=dict(size=16, family="Segoe UI", color="white"),
@@ -9703,18 +9762,23 @@ def update_opp_contributions_chart(
             margin=dict(t=40, b=60),
             hoverlabel=dict(font=dict(family="Segoe UI")),
         )
+
         return fig
 
     # -----------------------------
     # View 2: Minutes per Contribution
     # -----------------------------
     pm_df = merged.copy()
-    pm_df = pm_df[(pm_df["Contributions"] > 0) & pm_df["Mins Played"].notna() & (pm_df["Mins Played"] > 0)]
+    pm_df = pm_df[
+        (pm_df["Contributions"] > 0)
+        & pm_df["Mins Played"].notna()
+        & (pm_df["Mins Played"] > 0)
+    ]
 
     if pm_df.empty:
         fig = go.Figure()
         fig.update_layout(
-            title=f"{selected_opponent} – Contributions recorded but no minutes available for those players",
+            title=f"{chart_team} – Contributions recorded but no minutes available for those players",
             plot_bgcolor="black",
             paper_bgcolor="black",
             font=dict(color="white", family=base_font["fontFamily"]),
@@ -9729,18 +9793,19 @@ def update_opp_contributions_chart(
         pm_df["Contributions Per Minute"]
     ).clip(upper=270)
 
-    # Sorting for MPC view
     if trig == "opp-sort-low-contrib":
         pm_df = pm_df.sort_values("Contributions Per Minute", ascending=False)
     else:
         pm_df = pm_df.sort_values("Contributions Per Minute", ascending=True)
 
     x_order = list(pm_df["Player Name"])
+
     customdata = pm_df[
         ["Contributions", "Mins Played", "Display Contributions Per Minute"]
     ].values
 
     fig = go.Figure()
+
     fig.add_trace(
         go.Bar(
             x=pm_df["Player Name"],
@@ -9768,8 +9833,9 @@ def update_opp_contributions_chart(
         zeroline=True,
         zerolinecolor="#555",
     )
+
     fig.update_layout(
-        title=f"{selected_opponent} – Goal Contributions Per Minute (rounded up, capped 270 mins)",
+        title=f"{chart_team} – Goal Contributions Per Minute (rounded up, capped 270 mins)",
         plot_bgcolor="black",
         paper_bgcolor="black",
         font=dict(size=16, family="Segoe UI", color="white"),
@@ -10008,6 +10074,9 @@ def update_opp_minutes_played_chart(
         )
         return fig
 
+    is_all = str(selected_opponent).strip().upper() == "ALL"
+    chart_team = "ALL Teams" if is_all else selected_opponent
+
     df = player_data.copy()
 
     df["Player Name"] = df["Player Name"].astype(str).str.strip()
@@ -10019,13 +10088,14 @@ def update_opp_minutes_played_chart(
         df["Team"] = df["Team"].astype(str).str.strip()
         df = df[df["Team"] == str(selected_squad).strip()].copy()
 
-    # keep all rows for the selected opponent, not just matches vs Belconnen
-    df = df[df["Country"] == str(selected_opponent).strip()].copy()
+    # If ALL is selected, keep all teams. Otherwise filter to selected opponent.
+    if not is_all:
+        df = df[df["Country"] == str(selected_opponent).strip()].copy()
 
     if df.empty:
         fig = go.Figure()
         fig.update_layout(
-            title=f"{selected_opponent} – no player minutes recorded",
+            title=f"{chart_team} – no player minutes recorded",
             plot_bgcolor="black",
             paper_bgcolor="black",
             font=dict(size=14, color="white", family="Segoe UI"),
@@ -10066,7 +10136,7 @@ def update_opp_minutes_played_chart(
         grouped,
         x="Player Name",
         y="Mins Played",
-        title=f"{selected_opponent} – Total Minutes Played",
+        title=f"{chart_team} – Total Minutes Played",
         color_discrete_sequence=["#77BCE8"],
         template="plotly_dark",
         text="Mins Played",
