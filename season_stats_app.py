@@ -167,14 +167,20 @@ league_goal_data["Minute Scored"] = pd.to_numeric(
     errors="coerce"
 )
 
-# Ensure Match Date is datetime
-league_goal_data["Match Date"] = pd.to_datetime(
-    league_goal_data["Match Date"],
-    errors="coerce"
-)
+# Ensure Match Date is datetime safely
+if "Match Date" in league_goal_data.columns and not league_goal_data.empty:
+    league_goal_data["Match Date"] = league_goal_data["Match Date"].astype(str).str.strip()
+    league_goal_data["Match Date"] = pd.to_datetime(
+        league_goal_data["Match Date"],
+        errors="coerce",
+        dayfirst=True
+    )
+else:
+    league_goal_data["Match Date"] = pd.NaT
+
 
 # Derive Year for tournament filtering
-league_goal_data["Year"] = league_goal_data["Match Date"].dt.year
+league_goal_data["Year"] = league_goal_data["Match Date"].dt.year.fillna(0).astype(int)
 
 
 # Result: For = scored by Olyroos, Against = scored by opponent
