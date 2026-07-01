@@ -43,6 +43,7 @@ def log_root_hits():
         print(f"[PAGE VIEW] {now}  path=/  user_agent={ua}")
 
 
+
 # Load .env if it exists (safe for local and Render)
 load_dotenv()
 
@@ -129,30 +130,62 @@ def load_app_sheet(sheet_name, squad_label):
     return player_df, team_df, league_df
 
 
-# ---------- load both squad files ----------
-player_data_1sts, team_data_1sts, league_goal_data_1sts = load_app_sheet(
-    SQUAD_SHEET_MAP["1sts"], "1sts"
-)
+# ---------- refresh all app data ----------
+def refresh_all_data():
+    global player_data, team_data, league_goal_data
 
-player_data_reserves, team_data_reserves, league_goal_data_reserves = load_app_sheet(
-    SQUAD_SHEET_MAP["Reserves"], "Reserves"
-)
+    print("🔄 Refreshing Google Sheets data...")
 
-# ---------- combined datasets used by app ----------
-player_data = pd.concat(
-    [player_data_1sts, player_data_reserves],
-    ignore_index=True
-)
+    player_data_1sts, team_data_1sts, league_goal_data_1sts = load_app_sheet(
+        SQUAD_SHEET_MAP["1sts"], "1sts"
+    )
 
-team_data = pd.concat(
-    [team_data_1sts, team_data_reserves],
-    ignore_index=True
-)
+    player_data_reserves, team_data_reserves, league_goal_data_reserves = load_app_sheet(
+        SQUAD_SHEET_MAP["Reserves"], "Reserves"
+    )
 
-league_goal_data = pd.concat(
-    [league_goal_data_1sts, league_goal_data_reserves],
-    ignore_index=True
-)
+    player_data = pd.concat(
+        [player_data_1sts, player_data_reserves],
+        ignore_index=True
+    )
+
+    team_data = pd.concat(
+        [team_data_1sts, team_data_reserves],
+        ignore_index=True
+    )
+
+    league_goal_data = pd.concat(
+        [league_goal_data_1sts, league_goal_data_reserves],
+        ignore_index=True
+    )
+
+    print("✅ Google Sheets data refreshed successfully")
+
+
+# ---------- initial app load ----------
+try:
+    refresh_all_data()
+except Exception as e:
+    print(f"❌ Initial Google Sheets load failed: {e}")
+
+    player_data = pd.DataFrame()
+    team_data = pd.DataFrame()
+    league_goal_data = pd.DataFrame()
+
+
+@app.server.route("/refresh-data")
+def refresh_data_route():
+    key = request.args.get("key")
+
+    if key != os.getenv("REFRESH_KEY"):
+        return "Unauthorized", 401
+
+    try:
+        refresh_all_data()
+        return "Google Sheets data refreshed successfully."
+    except Exception as e:
+        print(f"❌ Manual refresh failed: {e}")
+        return f"Refresh failed: {e}", 500
 
 
 #================================================
